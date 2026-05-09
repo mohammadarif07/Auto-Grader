@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AutoGrade — Intelligent Python Evaluator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg0: #0b0d11;
+  --bg1: #10131a;
+  --bg2: #161b26;
+  --bg3: #1e2535;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text0: #f0f2f7;
+  --text1: #9aa3b8;
+  --text2: #5a6480;
+  --accent: #3dffa0;
+  --accent2: #00c8ff;
+  --warn: #ffcc44;
+  --danger: #ff4d6a;
+  --pass-c: #3dffa0;
+  --fail-c: #ff4d6a;
+  --partial-c: #ffcc44;
+  --error-c: #ff8c42;
+  --mono: 'JetBrains Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --radius: 8px;
+  --shadow: 0 4px 32px rgba(0,0,0,0.45);
+}
+[data-theme="light"] {
+  --bg0: #f4f5f8;
+  --bg1: #ffffff;
+  --bg2: #eef0f5;
+  --bg3: #e4e7ef;
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.14);
+  --text0: #0e1120;
+  --text1: #4a5168;
+  --text2: #9aa3b8;
+  --shadow: 0 4px 32px rgba(0,0,0,0.10);
+}
+
+html, body { min-height:100vh; background:var(--bg0); color:var(--text0);
+  font-family:var(--mono); scroll-behavior:smooth; }
+
+/* ── Noise texture overlay ─────────────────────────────────────── */
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity: 0.6;
+}
+
+/* ── Grid bg ───────────────────────────────────────────────────── */
+body::after {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 30%, transparent 100%);
+}
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.container { max-width:1160px; margin:0 auto; padding:0 24px; position:relative; z-index:1; }
+
+/* ── Header ────────────────────────────────────────────────────── */
+header {
+  padding: 28px 0 0;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.logo {
+  display:flex; align-items:center; gap:12px;
+}
+.logo-mark {
+  width:38px; height:38px; background:var(--accent); border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--display); font-weight:800; font-size:16px; color:#000;
+  letter-spacing:-1px; flex-shrink:0;
+}
+.logo-text { font-family:var(--display); font-size:18px; font-weight:700; color:var(--text0); }
+.logo-sub  { font-family:var(--mono); font-size:9.5px; color:var(--text2); letter-spacing:0.18em; text-transform:uppercase; margin-top:1px; }
+
+.header-right { display:flex; align-items:center; gap:12px; }
+.theme-btn {
+  background:var(--bg2); border:1px solid var(--border2); color:var(--text1);
+  padding:7px 14px; border-radius:var(--radius); font-family:var(--mono);
+  font-size:11px; cursor:pointer; transition:all .2s; letter-spacing:0.08em;
+}
+.theme-btn:hover { background:var(--bg3); color:var(--text0); }
+.badge {
+  background:var(--bg2); border:1px solid var(--border); color:var(--text2);
+  font-size:9.5px; padding:4px 10px; border-radius:20px; letter-spacing:0.1em;
+}
+
+/* ── Hero strip ────────────────────────────────────────────────── */
+.hero {
+  padding: 52px 0 40px;
+  display:grid; grid-template-columns:1fr auto; align-items:end; gap:32px;
+}
+.hero h1 {
+  font-family:var(--display); font-size:clamp(32px, 5vw, 52px);
+  font-weight:800; line-height:1.1; color:var(--text0);
+}
+.hero h1 span { color:var(--accent); }
+.hero p { font-family:var(--mono); font-size:12px; color:var(--text1); margin-top:14px; line-height:1.8; max-width:540px; }
+.hero-stats { display:flex; gap:28px; }
+.hstat { text-align:right; }
+.hstat-num { font-family:var(--display); font-size:28px; font-weight:800; color:var(--accent2); }
+.hstat-lbl { font-size:9px; color:var(--text2); letter-spacing:0.14em; text-transform:uppercase; margin-top:2px; }
+
+/* ── Divider ───────────────────────────────────────────────────── */
+.divider { height:1px; background: linear-gradient(90deg, transparent, var(--border2) 30%, var(--border2) 70%, transparent); margin:4px 0 36px; }
+
+/* ── Upload zone ───────────────────────────────────────────────── */
+.upload-section { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px; }
+
+.drop-zone {
+  border:1.5px dashed var(--border2); border-radius:var(--radius);
+  background:var(--bg1); padding:36px 24px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  cursor:pointer; transition:all .25s; min-height:180px;
+  position:relative; overflow:hidden;
+}
+.drop-zone::before {
+  content:''; position:absolute; inset:0;
+  background: radial-gradient(circle at 50% 0%, rgba(61,255,160,0.04) 0%, transparent 70%);
+  opacity:0; transition:opacity .25s;
+}
+.drop-zone:hover::before, .drop-zone.drag-over::before { opacity:1; }
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color:var(--accent); background:var(--bg2);
+}
+.drop-icon { font-size:32px; line-height:1; }
+.drop-title { font-family:var(--display); font-size:14px; font-weight:600; color:var(--text0); }
+.drop-sub   { font-size:10px; color:var(--text2); letter-spacing:0.08em; }
+.file-list  { margin-top:8px; width:100%; }
+.file-chip  {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--bg3); border:1px solid var(--border); border-radius:5px;
+  padding:6px 10px; margin-top:6px; font-size:10.5px; color:var(--text1);
+}
+.file-chip .fname { color:var(--accent); font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-chip .fsize { color:var(--text2); margin-left:8px; flex-shrink:0; }
+.rm-btn { background:none; border:none; cursor:pointer; color:var(--text2); font-size:14px; margin-left:8px; line-height:1; padding:0 2px; }
+.rm-btn:hover { color:var(--danger); }
+
+.config-panel { background:var(--bg1); border:1px solid var(--border); border-radius:var(--radius); padding:24px; }
+.config-panel h3 { font-family:var(--display); font-size:13px; font-weight:700; color:var(--text0); margin-bottom:18px; letter-spacing:0.04em; }
+
+.form-group { margin-bottom:16px; }
+.form-group label { display:block; font-size:10px; color:var(--text2); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px; }
+.form-group textarea, .form-group input {
+  width:100%; background:var(--bg2); border:1px solid var(--border2);
+  color:var(--text0); font-family:var(--mono); font-size:11.5px;
+  padding:10px 12px; border-radius:6px; resize:vertical; outline:none;
+  transition:border .2s;
+}
+.form-group textarea:focus, .form-group input:focus { border-color:var(--accent); }
+.form-group textarea { min-height:68px; }
+
+.tc-row { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:start; }
+.tc-row input { min-height:36px; }
+.tc-add-btn, .tc-rm-btn {
+  background:var(--bg3); border:1px solid var(--border2); color:var(--text1);
+  font-size:18px; line-height:1; padding:6px 10px; border-radius:6px; cursor:pointer;
+  transition:all .15s; font-family:var(--mono); margin-top:0;
+}
+.tc-add-btn:hover { background:var(--accent); color:#000; border-color:var(--accent); }
+.tc-rm-btn:hover  { background:var(--danger); color:#fff; border-color:var(--danger); }
+
+/* ── Actions bar ───────────────────────────────────────────────── */
+.action-bar { display:flex; align-items:center; gap:12px; margin-bottom:36px; }
+.btn-primary {
+  background:var(--accent); color:#000; border:none;
+  font-family:var(--display); font-size:13px; font-weight:700;
+  padding:13px 32px; border-radius:var(--radius); cursor:pointer;
+  transition:all .2s; letter-spacing:0.02em;
+  box-shadow: 0 0 0 0 rgba(61,255,160,0.4);
+}
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 24px rgba(61,255,160,0.3); }
+.btn-primary:active { transform:translateY(0); }
+.btn-primary:disabled { opacity:0.45; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-secondary {
+  background:var(--bg2); color:var(--text1); border:1px solid var(--border2);
+  font-family:var(--mono); font-size:11px;
+  padding:12px 22px; border-radius:var(--radius); cursor:pointer;
+  transition:all .2s; letter-spacing:0.08em;
+}
+.btn-secondary:hover { background:var(--bg3); color:var(--text0); }
+.btn-secondary:disabled { opacity:0.4; cursor:not-allowed; }
+
+/* ── Progress ──────────────────────────────────────────────────── */
+#progress-wrap { display:none; margin-bottom:32px; }
+.progress-card {
+  background:var(--bg1); border:1px solid var(--border); border-radius:var(--radius);
+  padding:28px 28px 24px;
+}
+.progress-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.progress-title { font-family:var(--display); font-size:14px; font-weight:700; color:var(--text0); }
+.progress-status { font-size:10px; color:var(--accent); letter-spacing:0.1em; }
+.progress-bar-wrap {
+  height:6px; background:var(--bg3); border-radius:10px; overflow:hidden; margin-bottom:12px;
+}
+.progress-bar-fill {
+  height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius:10px; width:0%; transition:width .4s ease;
+}
+.progress-steps { display:flex; gap:24px; }
+.pstep { font-size:10px; color:var(--text2); display:flex; align-items:center; gap:6px; }
+.pstep.active { color:var(--accent); }
+.pstep.done   { color:var(--text1); }
+.pstep-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.pstep.active .pstep-dot { animation: pulse 1.1s infinite; }
+
+/* ── Results ───────────────────────────────────────────────────── */
+#results-wrap { display:none; }
+.results-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;
+}
+.results-title { font-family:var(--display); font-size:20px; font-weight:800; color:var(--text0); }
+.summary-chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip {
+  font-size:10px; padding:4px 12px; border-radius:20px; font-weight:500;
+  letter-spacing:0.06em; border:1px solid;
+}
+.chip-pass    { background:rgba(61,255,160,0.1); color:var(--pass-c); border-color:rgba(61,255,160,0.25); }
+.chip-fail    { background:rgba(255,77,106,0.1); color:var(--fail-c); border-color:rgba(255,77,106,0.25); }
+.chip-partial { background:rgba(255,204,68,0.1); color:var(--partial-c); border-color:rgba(255,204,68,0.25); }
+.chip-error   { background:rgba(255,140,66,0.1); color:var(--error-c); border-color:rgba(255,140,66,0.25); }
+.chip-neutral { background:var(--bg2); color:var(--text1); border-color:var(--border2); }
+
+/* Tabs */
+.tabs { display:flex; gap:0; border-bottom:1px solid var(--border2); margin-bottom:24px; }
+.tab {
+  padding:10px 22px; font-size:11px; font-weight:500; cursor:pointer;
+  color:var(--text2); border-bottom:2px solid transparent; margin-bottom:-1px;
+  transition:all .2s; letter-spacing:0.08em; text-transform:uppercase;
+}
+.tab:hover { color:var(--text1); }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+/* Leaderboard */
+#tab-leaderboard { display:none; }
+.leaderboard-table { width:100%; border-collapse:collapse; }
+.leaderboard-table th {
+  text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:0.14em;
+  color:var(--text2); padding:8px 14px; border-bottom:1px solid var(--border2);
+}
+.leaderboard-table td { padding:12px 14px; border-bottom:1px solid var(--border); font-size:12px; }
+.leaderboard-table tr:hover td { background:var(--bg2); }
+.rank-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px; border-radius:50%; font-weight:700; font-size:11px;
+}
+.rank-1 { background:rgba(255,204,0,0.18); color:#ffcc00; }
+.rank-2 { background:rgba(192,192,192,0.18); color:#c0c0c0; }
+.rank-3 { background:rgba(205,127,50,0.18); color:#cd7f32; }
+.rank-n { background:var(--bg3); color:var(--text2); }
+
+/* Result cards */
+.result-card {
+  background:var(--bg1); border:1px solid var(--border);
+  border-radius:var(--radius); margin-bottom:12px;
+  overflow:hidden; transition:border-color .2s;
+}
+.result-card:hover { border-color:var(--border2); }
+.result-card.expanded { border-color:var(--border2); }
+
+.card-header {
+  padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer;
+  user-select:none;
+}
+.card-rank { font-family:var(--display); font-size:11px; font-weight:700; color:var(--text2); width:28px; text-align:center; flex-shrink:0; }
+.card-filename { font-size:12.5px; font-weight:500; color:var(--text0); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card-meta { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.status-pill {
+  padding:3px 10px; border-radius:20px; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.1em; border:1px solid;
+}
+.sp-pass    { background:rgba(61,255,160,0.1); color:var(--pass-c); border-color:rgba(61,255,160,0.3); }
+.sp-fail    { background:rgba(255,77,106,0.1); color:var(--fail-c); border-color:rgba(255,77,106,0.3); }
+.sp-partial { background:rgba(255,204,68,0.1); color:var(--partial-c); border-color:rgba(255,204,68,0.3); }
+.sp-error   { background:rgba(255,140,66,0.1); color:var(--error-c); border-color:rgba(255,140,66,0.3); }
+
+.marks-display { text-align:right; flex-shrink:0; }
+.marks-num { font-family:var(--display); font-size:18px; font-weight:800; line-height:1; }
+.marks-denom { font-size:10px; color:var(--text2); }
+.marks-bar-wrap { width:80px; height:4px; background:var(--bg3); border-radius:10px; margin-top:4px; overflow:hidden; }
+.marks-bar-fill { height:100%; border-radius:10px; transition:width 1s cubic-bezier(.22,.61,.36,1); }
+.fill-pass    { background: linear-gradient(90deg, #3dffa0, #00ffc8); }
+.fill-fail    { background: linear-gradient(90deg, #ff4d6a, #ff1744); }
+.fill-partial { background: linear-gradient(90deg, #ffcc44, #ff9a00); }
+.fill-error   { background: linear-gradient(90deg, #ff8c42, #ff5500); }
+
+.exec-time { font-size:10px; color:var(--text2); flex-shrink:0; }
+.chevron { font-size:14px; color:var(--text2); transition:transform .25s; flex-shrink:0; }
+.expanded .chevron { transform:rotate(180deg); }
+
+/* Detail panel */
+.card-detail {
+  display:none; padding:0 20px 20px; border-top:1px solid var(--border);
+  animation: slideDown .2s ease-out both;
+}
+@keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+.detail-block h4 { font-size:9.5px; text-transform:uppercase; letter-spacing:0.16em; color:var(--text2); margin-bottom:8px; }
+.code-block {
+  background:var(--bg0); border:1px solid var(--border);
+  border-radius:6px; padding:12px 14px; font-size:11px; color:var(--text1);
+  white-space:pre-wrap; word-break:break-all; max-height:180px; overflow-y:auto; line-height:1.7;
+  font-family:var(--mono);
+}
+.code-block.err { border-color:rgba(255,77,106,0.3); color:var(--danger); }
+.sim-row { display:flex; align-items:center; gap:10px; margin-top:10px; }
+.sim-label { font-size:10px; color:var(--text2); width:90px; flex-shrink:0; }
+.sim-bar-wrap { flex:1; height:5px; background:var(--bg3); border-radius:10px; overflow:hidden; }
+.sim-fill { height:100%; background:linear-gradient(90deg, var(--accent2), var(--accent)); border-radius:10px; }
+.sim-val { font-size:10px; color:var(--text0); font-weight:600; width:36px; text-align:right; }
+
+/* Test case chips in detail */
+.tc-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.tc-chip {
+  font-size:9.5px; padding:3px 9px; border-radius:4px; border:1px solid;
+}
+.tc-chip.pass  { background:rgba(61,255,160,0.08); color:var(--pass-c); border-color:rgba(61,255,160,0.25); }
+.tc-chip.fail  { background:rgba(255,77,106,0.08); color:var(--fail-c); border-color:rgba(255,77,106,0.25); }
+
+/* Toast */
+#toast {
+  position:fixed; bottom:28px; right:28px; z-index:999;
+  background:var(--bg3); border:1px solid var(--border2); color:var(--text0);
+  padding:12px 20px; border-radius:var(--radius); font-size:12px;
+  transform:translateY(80px); opacity:0; transition:all .3s;
+  pointer-events:none;
+}
+#toast.show { transform:translateY(0); opacity:1; }
+
+/* Footer ── */
+footer { padding:40px 0 32px; text-align:center; font-size:10px; color:var(--text2); letter-spacing:0.1em; }
+footer span { color:var(--text1); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--bg1); }
+::-webkit-scrollbar-thumb { background:var(--bg3); border-radius:10px; }
+::-webkit-scrollbar-thumb:hover { background:var(--border2); }
+
+/* Animations */
+@keyframes fadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.anim { animation: fadeIn .5s ease-out both; }
+.anim-d1 { animation-delay:.08s; }
+.anim-d2 { animation-delay:.16s; }
+.anim-d3 { animation-delay:.24s; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<div class="container">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">AG</div>
+      <div>
+        <div class="logo-text">AutoGrade</div>
+        <div class="logo-sub">Intelligent Python Evaluator</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="badge">v2.0 · Flask</span>
+      <button class="theme-btn" onclick="toggleTheme()">◐ Theme</button>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero anim">
+    <div>
+      <h1>Evaluate code.<br/><span>Instantly.</span></h1>
+      <p>Upload student Python files, define expected outputs or test cases, and get an intelligent, detailed evaluation report — powered by a secure sandboxed execution engine.</p>
+    </div>
+    <div class="hero-stats anim anim-d1">
+      <div class="hstat">
+        <div class="hstat-num" id="stat-files">0</div>
+        <div class="hstat-lbl">Files Graded</div>
+      </div>
+      <div class="hstat">
+        <div class="hstat-num" id="stat-pass">—</div>
+        <div class="hstat-lbl">Pass Rate</div>
+      </div>
+      <div class="hstat">
+        <div class="hstat-num" id="stat-avg">—</div>
+        <div class="hstat-lbl">Avg Score</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- UPLOAD SECTION -->
+  <div class="upload-section anim anim-d2">
+    <!-- Drop zone -->
+    <div>
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-icon">⌨</div>
+        <div class="drop-title">Drop Python files here</div>
+        <div class="drop-sub">or click to browse · .py files only</div>
+        <div class="file-list" id="file-list"></div>
+      </div>
+      <input type="file" id="file-input" multiple accept=".py" style="display:none" onchange="onFileSelect(event)"/>
+    </div>
+
+    <!-- Config panel -->
+    <div class="config-panel">
+      <h3>⚙ Evaluation Config</h3>
+
+      <div class="form-group">
+        <label>Expected Output (single comparison)</label>
+        <textarea id="expected-output" placeholder="e.g.&#10;Hello, World!&#10;42"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Max Marks per File</label>
+        <input type="number" id="marks-input" value="100" min="1" max="1000"/>
+      </div>
+
+      <div class="form-group">
+        <label>Test Cases (input → expected output)</label>
+        <div id="tc-list">
+          <div class="tc-row">
+            <input type="text" placeholder="stdin input" class="tc-in"/>
+            <input type="text" placeholder="expected output" class="tc-exp"/>
+            <button class="tc-rm-btn" onclick="removeTc(this)">−</button>
+          </div>
+        </div>
+        <button class="tc-add-btn" style="font-size:12px;padding:6px 14px;margin-top:6px" onclick="addTc()">+ Add Test Case</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="action-bar anim anim-d3">
+    <button class="btn-primary" id="run-btn" onclick="runGrader()">▶ Run Evaluation</button>
+    <button class="btn-secondary" id="export-btn" onclick="exportCsv()" disabled>⬇ Export CSV</button>
+    <button class="btn-secondary" onclick="resetAll()">↺ Reset</button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div id="progress-wrap">
+    <div class="progress-card">
+      <div class="progress-header">
+        <span class="progress-title">Evaluating submissions…</span>
+        <span class="progress-status" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar"></div></div>
+      <div class="progress-steps">
+        <div class="pstep active" id="step1"><span class="pstep-dot"></span>Uploading files</div>
+        <div class="pstep" id="step2"><span class="pstep-dot"></span>Executing code</div>
+        <div class="pstep" id="step3"><span class="pstep-dot"></span>Comparing outputs</div>
+        <div class="pstep" id="step4"><span class="pstep-dot"></span>Generating report</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results-wrap">
+    <div class="results-header">
+      <div class="results-title">Evaluation Report</div>
+      <div class="summary-chips" id="summary-chips"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
+      <div class="tab" onclick="switchTab('leaderboard')">Leaderboard</div>
+    </div>
+
+    <div id="tab-dashboard"></div>
+    <div id="tab-leaderboard">
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Filename</th><th>Status</th>
+            <th>Marks</th><th>Exec Time</th><th>Similarity</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    AutoGrade — Intelligent Auto-Grading System &nbsp;·&nbsp; <span>Built with Flask + Vanilla JS</span>
+  </footer>
+</div>
+
+<script>
+/* ── State ────────────────────────────────────────────────────── */
+let selectedFiles = [];
+let sessionId = null;
+let lastResults = [];
+
+/* ── Theme ────────────────────────────────────────────────────── */
+function toggleTheme() {
+  const el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+/* ── File handling ─────────────────────────────────────────────── */
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault(); onDragLeave();
+  addFiles([...e.dataTransfer.files]);
+}
+function onFileSelect(e) { addFiles([...e.target.files]); e.target.value=''; }
+
+function addFiles(files) {
+  files.forEach(f => {
+    if (!f.name.endsWith('.py')) { showToast(`⚠ ${f.name} is not a .py file`); return; }
+    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size))
+      selectedFiles.push(f);
+  });
+  renderFileList();
+}
+function removeFile(idx) { selectedFiles.splice(idx, 1); renderFileList(); }
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-chip">
+      <span class="fname">${f.name}</span>
+      <span class="fsize">${(f.size/1024).toFixed(1)}KB</span>
+      <button class="rm-btn" onclick="event.stopPropagation();removeFile(${i})">✕</button>
+    </div>`).join('');
+}
+
+/* ── Test cases ────────────────────────────────────────────────── */
+function addTc() {
+  const row = document.createElement('div');
+  row.className = 'tc-row';
+  row.innerHTML = `<input type="text" placeholder="stdin input" class="tc-in"/>
+    <input type="text" placeholder="expected output" class="tc-exp"/>
+    <button class="tc-rm-btn" onclick="removeTc(this)">−</button>`;
+  document.getElementById('tc-list').appendChild(row);
+}
+function removeTc(btn) { btn.parentElement.remove(); }
+function getTestCases() {
+  return [...document.querySelectorAll('.tc-row')].map(r => ({
+    input: r.querySelector('.tc-in').value.trim(),
+    expected: r.querySelector('.tc-exp').value.trim()
+  })).filter(tc => tc.expected);
+}
+
+/* ── Progress animation ────────────────────────────────────────── */
+function setStep(n, pct) {
+  ['step1','step2','step3','step4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.className = 'pstep ' + (i < n-1 ? 'done' : i === n-1 ? 'active' : '');
+  });
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+}
+
+/* ── Main grader ───────────────────────────────────────────────── */
+async function runGrader() {
+  if (!selectedFiles.length) { showToast('⚠ Please upload at least one .py file'); return; }
+
+  const runBtn = document.getElementById('run-btn');
+  runBtn.disabled = true;
+
+  // Show progress
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('results-wrap').style.display = 'none';
+  setStep(1, 10);
+
+  const fd = new FormData();
+  selectedFiles.forEach(f => fd.append('files[]', f));
+  fd.append('expected', document.getElementById('expected-output').value);
+  fd.append('marks_per_file', document.getElementById('marks-input').value);
+  fd.append('test_inputs', JSON.stringify(getTestCases()));
+
+  // Simulate step progression
+  await sleep(350); setStep(2, 35);
+  await sleep(300); setStep(3, 65);
+
+  try {
+    const res = await fetch('/api/grade', { method:'POST', body:fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    setStep(4, 90);
+    await sleep(400);
+    setStep(4, 100);
+    await sleep(300);
+
+    sessionId = data.session_id;
+    lastResults = data.results;
+    renderResults(data.results);
+    document.getElementById('export-btn').disabled = false;
+    updateHeroStats(data.results);
+  } catch(err) {
+    showToast('✕ ' + err.message);
+  } finally {
+    document.getElementById('progress-wrap').style.display = 'none';
+    runBtn.disabled = false;
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ── Render results ───────────────────────────────────────────── */
+function renderResults(results) {
+  const wrap = document.getElementById('results-wrap');
+  wrap.style.display = 'block';
+  wrap.style.animation = 'fadeIn .4s ease-out both';
+
+  // Summary chips
+  const counts = {pass:0, fail:0, partial:0, error:0};
+  results.forEach(r => counts[r.status] = (counts[r.status]||0) + 1);
+  const total = results.length;
+  document.getElementById('summary-chips').innerHTML = `
+    <span class="chip chip-neutral">${total} Submitted</span>
+    ${counts.pass    ? `<span class="chip chip-pass">${counts.pass} Passed</span>` : ''}
+    ${counts.partial ? `<span class="chip chip-partial">${counts.partial} Partial</span>` : ''}
+    ${counts.fail    ? `<span class="chip chip-fail">${counts.fail} Failed</span>` : ''}
+    ${counts.error   ? `<span class="chip chip-error">${counts.error} Errors</span>` : ''}
+  `;
+
+  // Dashboard cards
+  document.getElementById('tab-dashboard').innerHTML = results.map((r, i) =>
+    buildCard(r, i)
+  ).join('');
+
+  // Leaderboard
+  document.getElementById('leaderboard-body').innerHTML = results.map(r => `
+    <tr>
+      <td><span class="rank-badge ${r.rank<=3?'rank-'+r.rank:'rank-n'}">${r.rank}</span></td>
+      <td style="color:var(--text0);font-weight:500">${esc(r.filename)}</td>
+      <td><span class="status-pill sp-${r.status}">${r.status}</span></td>
+      <td><span style="font-family:var(--display);font-size:15px;font-weight:700;color:${markColor(r.status)}">${r.marks}</span><span style="color:var(--text2);font-size:10px">/${r.max_marks}</span></td>
+      <td style="color:var(--text2)">${r.exec_time_ms}ms</td>
+      <td>${r.similarity != null ? `<span style="color:var(--accent2)">${r.similarity}%</span>` : '—'}</td>
+    </tr>`).join('');
+
+  // Animate marks bars after render
+  setTimeout(() => {
+    document.querySelectorAll('.marks-bar-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+    document.querySelectorAll('.sim-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  }, 100);
+}
+
+function buildCard(r, i) {
+  const pct = Math.round((r.marks / r.max_marks) * 100);
+  const tcHtml = r.total_tests != null ? `
+    <div class="tc-chips">
+      ${Array.from({length: r.total_tests}, (_,j) => {
+        const passed = j < r.passed_tests;
+        return `<span class="tc-chip ${passed?'pass':'fail'}">Test ${j+1} ${passed?'✓':'✗'}</span>`;
+      }).join('')}
+    </div>` : '';
+
+  return `
+  <div class="result-card" id="card-${i}">
+    <div class="card-header" onclick="toggleCard(${i})">
+      <span class="card-rank">#${r.rank}</span>
+      <span class="card-filename">${esc(r.filename)}</span>
+      <div class="card-meta">
+        <span class="exec-time">${r.exec_time_ms}ms</span>
+        <span class="status-pill sp-${r.status}">${r.status}</span>
+        <div class="marks-display">
+          <span class="marks-num" style="color:${markColor(r.status)}">${r.marks}</span>
+          <span class="marks-denom">/${r.max_marks}</span>
+          <div class="marks-bar-wrap">
+            <div class="marks-bar-fill fill-${r.status}" style="width:0%" data-pct="${pct}"></div>
+          </div>
+        </div>
+        <span class="chevron">▾</span>
+      </div>
+    </div>
+    <div class="card-detail" id="detail-${i}">
+      ${r.stderr ? `<div style="margin-top:14px">
+        <div class="detail-block">
+          <h4>${r.error_type} error</h4>
+          <div class="code-block err">${esc(r.stderr)}</div>
+        </div>
+      </div>` : ''}
+      <div class="detail-grid">
+        <div class="detail-block">
+          <h4>Student Output</h4>
+          <div class="code-block">${esc(r.stdout) || '<span style="color:var(--text2)">— no output —</span>'}</div>
+        </div>
+        <div class="detail-block">
+          <h4>Expected Output</h4>
+          <div class="code-block">${esc(r.expected) || '<span style="color:var(--text2)">— not specified —</span>'}</div>
+        </div>
+      </div>
+      ${r.similarity != null ? `
+      <div style="margin-top:14px">
+        <div class="sim-row">
+          <span class="sim-label">Output Similarity</span>
+          <div class="sim-bar-wrap"><div class="sim-fill" style="width:0%" data-pct="${r.similarity}"></div></div>
+          <span class="sim-val">${r.similarity}%</span>
+        </div>
+      </div>` : ''}
+      ${tcHtml}
+    </div>
+  </div>`;
+}
+
+function toggleCard(i) {
+  const card   = document.getElementById(`card-${i}`);
+  const detail = document.getElementById(`detail-${i}`);
+  const open   = detail.style.display === 'block';
+  detail.style.display = open ? 'none' : 'block';
+  card.classList.toggle('expanded', !open);
+  if (!open) {
+    setTimeout(() => {
+      detail.querySelectorAll('.marks-bar-fill,.sim-fill').forEach(el => {
+        el.style.width = el.dataset.pct + '%';
+      });
+    }, 50);
+  }
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['dashboard','leaderboard'][i]===tab));
+  document.getElementById('tab-dashboard').style.display   = tab==='dashboard'   ? 'block' : 'none';
+  document.getElementById('tab-leaderboard').style.display = tab==='leaderboard' ? 'block' : 'none';
+}
+
+/* ── Hero stats ────────────────────────────────────────────────── */
+function updateHeroStats(results) {
+  const total = results.length;
+  const passed = results.filter(r => r.status === 'pass').length;
+  const avg = total ? Math.round(results.reduce((s, r) => s + r.marks, 0) / total) : 0;
+  animCount('stat-files', 0, total, 600);
+  document.getElementById('stat-pass').textContent = total ? Math.round(passed/total*100)+'%' : '—';
+  document.getElementById('stat-avg').textContent = avg;
+}
+function animCount(id, from, to, duration) {
+  const el = document.getElementById(id);
+  const step = (to - from) / (duration / 16);
+  let cur = from;
+  const t = setInterval(() => {
+    cur = Math.min(cur + step, to);
+    el.textContent = Math.round(cur);
+    if (cur >= to) clearInterval(t);
+  }, 16);
+}
+
+/* ── Export ────────────────────────────────────────────────────── */
+function exportCsv() {
+  if (!sessionId) return;
+  window.location = `/api/export/${sessionId}`;
+  showToast('✓ CSV download started');
+}
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+function resetAll() {
+  selectedFiles = []; sessionId = null; lastResults = [];
+  renderFileList();
+  document.getElementById('expected-output').value = '';
+  document.getElementById('marks-input').value = '100';
+  document.getElementById('tc-list').innerHTML = `
+    <div class="tc-row">
+      <input type="text" placeholder="stdin input" class="tc-in"/>
+      <input type="text" placeholder="expected output" class="tc-exp"/>
+      <button class="tc-rm-btn" onclick="removeTc(this)">−</button>
+    </div>`;
+  document.getElementById('results-wrap').style.display = 'none';
+  document.getElementById('export-btn').disabled = true;
+  document.getElementById('stat-files').textContent = '0';
+  document.getElementById('stat-pass').textContent = '—';
+  document.getElementById('stat-avg').textContent = '—';
+  showToast('↺ Reset complete');
+}
+
+/* ── Helpers ───────────────────────────────────────────────────── */
+function markColor(status) {
+  return {pass:'var(--pass-c)', fail:'var(--fail-c)', partial:'var(--partial-c)', error:'var(--error-c)'}[status] || 'var(--text1)';
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// init tab
+switchTab('dashboard');
+</script>
+</body>
+</html>
